@@ -46,6 +46,8 @@ services:
       - KAFKA_BROKERS=kafka:9092
     ports:
       - "8080:8080"
+    volumes:
+      - signoz_query_data:/var/lib/signoz 
     depends_on:
       - clickhouse
       - kafka
