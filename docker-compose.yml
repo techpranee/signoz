@@ -32,7 +32,7 @@ services:
       - "4317:4317"
       - "4318:4318"
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     command: --config=/etc/otel-collector-config.yaml
     depends_on:
       - clickhouse
