@@ -26,28 +26,15 @@ services:
       - zookeeper
     restart: unless-stopped
 
-  otel-collector:
-    image: signoz/signoz-otel-collector:0.88.16
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    depends_on:
-      - clickhouse
-      - kafka
-    restart: unless-stopped
-
-  query-service:
-    image: signoz/query-service:latest
+  signoz-query-service:  # ✅ renamed to match Nginx config
+    image: signoz/query-service:0.89.9
     environment:
       - CLICKHOUSE_HOST=clickhouse
       - KAFKA_BROKERS=kafka:9092
     ports:
       - "8080:8080"
     volumes:
-      - signoz_query_data:/var/lib/signoz 
+      - signoz_query_data:/var/lib/signoz
     depends_on:
       - clickhouse
       - kafka
@@ -58,8 +45,23 @@ services:
     ports:
       - "3301:3301"
     depends_on:
-      - query-service
+      - signoz-query-service
+    restart: unless-stopped
+
+  otel-collector:
+    image: signoz/signoz-otel-collector:0.88.16
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    command:
+      - "--config=/etc/otel-collector-config.yaml"
+    depends_on:
+      - clickhouse
+      - kafka
     restart: unless-stopped
 
 volumes:
   clickhouse_data:
+  signoz_query_data:
