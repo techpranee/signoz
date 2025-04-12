@@ -26,26 +26,19 @@ services:
       - zookeeper
     restart: unless-stopped
 
-  signoz-query-service:  # ✅ renamed to match Nginx config
-    image: signoz/query-service:0.89.9
+  signoz:
+    image: signoz/signoz:0.89.9
     environment:
       - CLICKHOUSE_HOST=clickhouse
       - KAFKA_BROKERS=kafka:9092
     ports:
-      - "8080:8080"
+      - "3301:3301"  # Web UI
+      - "8080:8080"  # API
     volumes:
-      - signoz_query_data:/var/lib/signoz
+      - signoz_data:/var/lib/signoz
     depends_on:
       - clickhouse
       - kafka
-    restart: unless-stopped
-
-  frontend:
-    image: signoz/frontend:0.29.1
-    ports:
-      - "3301:3301"
-    depends_on:
-      - signoz-query-service
     restart: unless-stopped
 
   otel-collector:
@@ -64,4 +57,4 @@ services:
 
 volumes:
   clickhouse_data:
-  signoz_query_data:
+  signoz_data:
