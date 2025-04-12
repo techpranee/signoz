@@ -22,7 +22,7 @@ services:
     ports:
       - "8080:8080" # SigNoz UI and API
     volumes:
-      - signoz-query-service-data:/var/lib/signoz-query
+      - signoz-query-service-data:/data/signoz-query
     environment:
       - TELEMETRY_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
