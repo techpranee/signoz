@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+exporters:
+  clickhousetraces:
+    endpoint: tcp://clickhouse:9000?database=signoz_traces
+  clickhousemetrics:
+    endpoint: tcp://clickhouse:9000?database=signoz_metrics
+
+processors:
+  batch:
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhousetraces]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhousemetrics]
