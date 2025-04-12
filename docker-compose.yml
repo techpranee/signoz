@@ -10,7 +10,7 @@ services:
     ports:
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP HTTP receiver
-      - "8888:8888" # Metrics endpoint for the collector itself
+      - "8889:8888" # Metrics endpoint for the collector itself
       - "9464:9464" # zpages endpoint for the collector
     restart: unless-stopped
     depends_on:
