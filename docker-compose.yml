@@ -1,60 +1,51 @@
-version: "3.8"
+version: '3.8'
 
 services:
-  clickhouse:
-    image: clickhouse/clickhouse-server:23.3
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    restart: unless-stopped
-
-  zookeeper:
-    image: zookeeper:3.9
-    restart: unless-stopped
-
-  kafka:
-    image: bitnami/kafka:3.5
-    environment:
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092
-    depends_on:
-      - zookeeper
-    restart: unless-stopped
-
-  signoz:
-    image: signoz/signoz:latest
-    environment:
-      - CLICKHOUSE_HOST=clickhouse
-      - KAFKA_BROKERS=kafka:9092
-    ports:
-      - "3301:3301"  # Web UI
-      - "8080:8080"  # API
-    volumes:
-      - signoz_data:/var/lib/signoz
-    depends_on:
-      - clickhouse
-      - kafka
-    restart: unless-stopped
-
   otel-collector:
-    image: signoz/signoz-otel-collector:0.88.16
-    ports:
-      - "4317:4317"
-      - "4318:4318"
+    image: signoz/otel-collector:latest
+    container_name: signoz-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    command:
-      - "--config=/etc/otel-collector-config.yaml"
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "8888:8888" # Metrics endpoint for the collector itself
+      - "9464:9464" # zpages endpoint for the collector
+    restart: unless-stopped
+    depends_on:
+      - query-service
+
+  query-service:
+    image: signoz/query-service:latest
+    container_name: signoz-query-service
+    ports:
+      - "8080:8080" # SigNoz UI and API
+    environment:
+      - TELEMETRY_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - CLICKHOUSE_HOSTS=clickhouse:9000
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+      - ENABLE_OPEN_TELEMETRY=true
+    restart: unless-stopped
     depends_on:
       - clickhouse
-      - kafka
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: signoz-clickhouse
+    ports:
+      - "8123:8123" # ClickHouse HTTP interface
+      - "9000:9000" # ClickHouse native interface
+    volumes:
+      - signoz-clickhouse-data:/var/lib/clickhouse
+      - signoz-clickhouse-logs:/var/log/clickhouse-server
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
     restart: unless-stopped
 
 volumes:
-  clickhouse_data:
-  signoz_data:
+  signoz-clickhouse-data:
+  signoz-clickhouse-logs:
