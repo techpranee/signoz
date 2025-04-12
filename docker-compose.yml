@@ -21,6 +21,8 @@ services:
     container_name: signoz-query-service
     ports:
       - "8080:8080" # SigNoz UI and API
+    volumes:
+      - signoz-query-service-data:/var/lib/signoz-query
     environment:
       - TELEMETRY_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
@@ -49,3 +51,4 @@ services:
 volumes:
   signoz-clickhouse-data:
   signoz-clickhouse-logs:
+  signoz-query-service-data:
