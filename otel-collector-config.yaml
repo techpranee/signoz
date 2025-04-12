@@ -4,22 +4,26 @@ receivers:
       grpc:
       http:
 
-exporters:
-  clickhousetraces:
-    endpoint: tcp://clickhouse:9000?database=signoz_traces
-  clickhousemetrics:
-    endpoint: tcp://clickhouse:9000?database=signoz_metrics
-
 processors:
   batch:
+
+exporters:
+  otlp:
+    endpoint: query-service:4317
+    tls:
+      insecure: true # Disable TLS for local communication
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhousetraces]
+      exporters: [otlp]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhousemetrics]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]
