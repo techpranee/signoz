@@ -96,18 +96,40 @@ services:
   clickhouse:
     !!merge <<: *clickhouse-defaults
     container_name: signoz-clickhouse
-    # ports:
-    #   - "9000:9000"
-    #   - "8123:8123"
-    #   - "9181:9181"
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >
+        cp /config/config.xml /etc/clickhouse-server/config.xml &&
+        cp /config/users.xml /etc/clickhouse-server/users.xml &&
+        /entrypoint.sh
+    configs:
+      - source: clickhouse_config_file
+        target: /config/config.xml
+      - source: clickhouse_users_file
+        target: /config/users.xml
     volumes:
-      - ./common/clickhouse/config.xml:/etc/clickhouse-server/config.xml
-      - ./common/clickhouse/users.xml:/etc/clickhouse-server/users.xml
       - ./common/clickhouse/custom-function.xml:/etc/clickhouse-server/custom-function.xml
       - ./common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
       - ./common/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
       - clickhouse:/var/lib/clickhouse/
       # - ../common/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml
+  
+  # clickhouse:
+  #   !!merge <<: *clickhouse-defaults
+  #   container_name: signoz-clickhouse
+  #   # ports:
+  #   #   - "9000:9000"
+  #   #   - "8123:8123"
+  #   #   - "9181:9181"
+  #   volumes:
+  #     - ./common/clickhouse/config.xml:/etc/clickhouse-server/config.xml
+  #     - ./common/clickhouse/users.xml:/etc/clickhouse-server/users.xml
+  #     - ./common/clickhouse/custom-function.xml:/etc/clickhouse-server/custom-function.xml
+  #     - ./common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
+  #     - ./common/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
+  #     - clickhouse:/var/lib/clickhouse/
+  #     # - ../common/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml
   signoz:
     !!merge <<: *db-depend
     image: signoz/signoz:${VERSION:-v0.78.1}
@@ -195,3 +217,8 @@ volumes:
     name: signoz-sqlite
   zookeeper-1:
     name: signoz-zookeeper-1
+configs:
+  clickhouse_config_file:
+    file: ./common/clickhouse/config.xml
+  clickhouse_users_file:
+    file: ./common/clickhouse/users.xml
