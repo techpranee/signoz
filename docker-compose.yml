@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   otel-collector:
-    image: signoz/otel-collector:latest
+    image: signoz/signoz-otel-collector:latest
     container_name: signoz-otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
