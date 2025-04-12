@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   signoz:
-    image: signoz/signoz:0.89.9
+    image: signoz/signoz:latest
     environment:
       - CLICKHOUSE_HOST=clickhouse
       - KAFKA_BROKERS=kafka:9092
