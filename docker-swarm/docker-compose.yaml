@@ -2,25 +2,25 @@ version: "3"
 x-common: &common
   networks:
     - signoz-net
-  restart: unless-stopped
+  deploy:
+    restart_policy:
+      condition: on-failure
   logging:
     options:
       max-size: 50m
       max-file: "3"
 x-clickhouse-defaults: &clickhouse-defaults
   !!merge <<: *common
-  # addding non LTS version due to this fix https://github.com/ClickHouse/ClickHouse/commit/32caf8716352f45c1b617274c7508c86b7d1afab
   image: clickhouse/clickhouse-server:24.1.2-alpine
   tty: true
-  labels:
-    signoz.io/scrape: "true"
-    signoz.io/port: "9363"
-    signoz.io/path: "/metrics"
+  deploy:
+    labels:
+      signoz.io/scrape: "true"
+      signoz.io/port: "9363"
+      signoz.io/path: "/metrics"
   depends_on:
-    init-clickhouse:
-      condition: service_completed_successfully
-    zookeeper-1:
-      condition: service_healthy
+    - init-clickhouse
+    - zookeeper-1
   healthcheck:
     test:
       - CMD
@@ -40,10 +40,11 @@ x-zookeeper-defaults: &zookeeper-defaults
   !!merge <<: *common
   image: bitnami/zookeeper:3.7.1
   user: root
-  labels:
-    signoz.io/scrape: "true"
-    signoz.io/port: "9141"
-    signoz.io/path: "/metrics"
+  deploy:
+    labels:
+      signoz.io/scrape: "true"
+      signoz.io/port: "9141"
+      signoz.io/path: "/metrics"
   healthcheck:
     test:
       - CMD-SHELL
@@ -54,15 +55,12 @@ x-zookeeper-defaults: &zookeeper-defaults
 x-db-depend: &db-depend
   !!merge <<: *common
   depends_on:
-    clickhouse:
-      condition: service_healthy
-    schema-migrator-sync:
-      condition: service_completed_successfully
+    - clickhouse
+    - schema-migrator
 services:
   init-clickhouse:
     !!merge <<: *common
     image: clickhouse/clickhouse-server:24.1.2-alpine
-    container_name: signoz-init-clickhouse
     command:
       - bash
       - -c
@@ -75,12 +73,13 @@ services:
         wget -O histogram-quantile.tar.gz "https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F$${version}/histogram-quantile_$${node_os}_$${node_arch}.tar.gz"
         tar -xvzf histogram-quantile.tar.gz
         mv histogram-quantile /var/lib/clickhouse/user_scripts/histogramQuantile
-    restart: on-failure
+    deploy:
+      restart_policy:
+        condition: on-failure
     volumes:
-      - ./common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
+      - ../common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
   zookeeper-1:
     !!merge <<: *zookeeper-defaults
-    container_name: signoz-zookeeper-1
     # ports:
     #   - "2181:2181"
     #   - "2888:2888"
@@ -95,29 +94,23 @@ services:
       - ZOO_PROMETHEUS_METRICS_PORT_NUMBER=9141
   clickhouse:
     !!merge <<: *clickhouse-defaults
-    container_name: signoz-clickhouse
-    entrypoint:
-      - /bin/bash
-      - -c
-      - >
-        cp /config/config.xml /etc/clickhouse-server/config.xml &&
-        cp /config/users.xml /etc/clickhouse-server/users.xml &&
-        /entrypoint.sh
-    configs:
-      - source: clickhouse_config_file
-        target: /config/config.xml
-      - source: clickhouse_users_file
-        target: /config/users.xml
+    # TODO: needed for clickhouse TCP connectio
+    hostname: clickhouse
+    # ports:
+    #   - "9000:9000"
+    #   - "8123:8123"
+    #   - "9181:9181"
     volumes:
-      - ./common/clickhouse/custom-function.xml:/etc/clickhouse-server/custom-function.xml
-      - ./common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
-      - ./common/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
+      - ../common/clickhouse/config.xml:/etc/clickhouse-server/config.xml
+      - ../common/clickhouse/users.xml:/etc/clickhouse-server/users.xml
+      - ../common/clickhouse/custom-function.xml:/etc/clickhouse-server/custom-function.xml
+      - ../common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
+      - ../common/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
       - clickhouse:/var/lib/clickhouse/
-
+      # - ../common/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml
   signoz:
     !!merge <<: *db-depend
-    image: signoz/signoz:${VERSION:-v0.78.1}
-    container_name: signoz
+    image: signoz/signoz:v0.78.1
     command:
       - --config=/root/config/prometheus.yml
       - --use-logs-new-schema=true
@@ -126,8 +119,8 @@ services:
       - "8080:8080" # signoz port
     #   - "6060:6060"     # pprof port
     volumes:
-      - ./common/signoz/prometheus.yml:/root/config/prometheus.yml
-      - ./common/dashboards:/root/config/dashboards
+      - ../common/signoz/prometheus.yml:/root/config/prometheus.yml
+      - ../common/dashboards:/root/config/dashboards
       - sqlite:/var/lib/signoz/
     environment:
       - SIGNOZ_ALERTMANAGER_PROVIDER=signoz
@@ -137,7 +130,7 @@ services:
       - STORAGE=clickhouse
       - GODEBUG=netdns=go
       - TELEMETRY_ENABLED=true
-      - DEPLOYMENT_TYPE=docker-standalone-amd
+      - DEPLOYMENT_TYPE=docker-swarm
     healthcheck:
       test:
         - CMD
@@ -150,8 +143,7 @@ services:
       retries: 3
   otel-collector:
     !!merge <<: *db-depend
-    image: signoz/signoz-otel-collector:${OTELCOL_TAG:-v0.111.38}
-    container_name: signoz-otel-collector
+    image: signoz/signoz-otel-collector:v0.111.38
     command:
       - --config=/etc/otel-collector-config.yaml
       - --manager-config=/etc/manager-config.yaml
@@ -159,38 +151,33 @@ services:
       - --feature-gates=-pkg.translator.prometheus.NormalizeName
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-      - ./common/signoz/otel-collector-opamp-config.yaml:/etc/manager-config.yaml
+      - ../common/signoz/otel-collector-opamp-config.yaml:/etc/manager-config.yaml
     environment:
-      - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux
+      - OTEL_RESOURCE_ATTRIBUTES=host.name={{.Node.Hostname}},os.type={{.Node.Platform.OS}}
       - LOW_CARDINAL_EXCEPTION_GROUPING=false
     ports:
       # - "1777:1777"     # pprof extension
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP HTTP receiver
+    deploy:
+      replicas: 3
     depends_on:
-      signoz:
-        condition: service_healthy
-  schema-migrator-sync:
+      - clickhouse
+      - schema-migrator
+      - signoz
+  schema-migrator:
     !!merge <<: *common
-    image: signoz/signoz-schema-migrator:${OTELCOL_TAG:-v0.111.38}
-    container_name: schema-migrator-sync
+    image: signoz/signoz-schema-migrator:v0.111.38
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+    entrypoint: sh
     command:
-      - sync
-      - --dsn=tcp://clickhouse:9000
-      - --up=
+      - -c
+      - "/signoz-schema-migrator sync --dsn=tcp://clickhouse:9000 --up= && /signoz-schema-migrator async --dsn=tcp://clickhouse:9000 --up="
     depends_on:
-      clickhouse:
-        condition: service_healthy
-    restart: on-failure
-  schema-migrator-async:
-    !!merge <<: *db-depend
-    image: signoz/signoz-schema-migrator:${OTELCOL_TAG:-v0.111.38}
-    container_name: schema-migrator-async
-    command:
-      - async
-      - --dsn=tcp://clickhouse:9000
-      - --up=
-    restart: on-failure
+      - clickhouse
 networks:
   signoz-net:
     name: signoz-net
@@ -201,8 +188,3 @@ volumes:
     name: signoz-sqlite
   zookeeper-1:
     name: signoz-zookeeper-1
-configs:
-  clickhouse_config_file:
-    file: ./common/clickhouse/config.xml
-  clickhouse_users_file:
-    file: ./common/clickhouse/users.xml
